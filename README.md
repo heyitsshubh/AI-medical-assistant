@@ -50,12 +50,13 @@ For a detailed view, refer to the **[MedicalAssistant.pdf](./assets/MedicalAssis
 
 | Component  | Tech Used                  |
 | ---------- | -------------------------- |
-| LLM        | Groq API (LLaMA3-70B)      |
+| LLM        | Groq API       |
 | Embeddings | Google Generative AI / BGE |
 | Vector DB  | Pinecone                   |
 | Framework  | LangChain                  |
 | Backend    | FastAPI                    |
 | Deployment | Render                     |
+| C!/CD workflow
 
 ---
 
@@ -184,14 +185,6 @@ $ streamlit run app.py
   uvicorn main:app --host 0.0.0.0 --port 10000
   ```
 
----
-
-## 🌟 Credits
-
-- Built by Supratim Nag
-- Inspired by LangChain, Groq, Pinecone, and FastAPI ecosystems
-
----
 
 ## 🎉 License
 
