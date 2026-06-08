@@ -1,5 +1,9 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from dotenv import load_dotenv
+
+# Load environment variables early so route modules can read them on import
+load_dotenv()
 
 from server.middlewares.exception_handlers import catch_exception_middleware
 from server.routes.upload_pdfs import router as upload_router

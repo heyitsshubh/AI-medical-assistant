@@ -30,29 +30,75 @@ UPLOAD_DIR="./uploaded_docs"
 os.makedirs(UPLOAD_DIR,exist_ok=True)
 
 
-# initialize pinecone instance
-pc=Pinecone(api_key=PINECONE_API_KEY)
-spec=ServerlessSpec(cloud="aws",region=PINECONE_ENV)
-existing_indexes=[i["name"] for i in pc.list_indexes()]
+# Lazy initialization of Pinecone
+_pc_instance = None
+_index_instance = None
 
+def _initialize_pinecone():
+    """Initialize Pinecone on first use (lazy loading)"""
+    global _pc_instance, _index_instance
+    
+    if _pc_instance is not None:
+        return _index_instance
+    
+    # create pinecone client
+    _pc_instance = Pinecone(api_key=PINECONE_API_KEY)
+    spec = ServerlessSpec(cloud="aws", region=PINECONE_ENV)
+    existing_indexes = [i["name"] for i in _pc_instance.list_indexes()]
 
-if PINECONE_INDEX_NAME not in existing_indexes:
-    pc.create_index(
-        name=PINECONE_INDEX_NAME,
-        dimension=768,
-        metric="dotproduct",
-        spec=spec
-    )
-    while not pc.describe_index(PINECONE_INDEX_NAME).status["ready"]:
-        time.sleep(1)
+    # determine embedding dimension by creating a quick test embedding
+    # this ensures we create an index with the correct dimensionality
+    embedding_model_name = "models/gemini-embedding-001"
+    embed_model = GoogleGenerativeAIEmbeddings(model=embedding_model_name)
+    try:
+        sample_vec = embed_model.embed_query("test")
+        desired_dim = len(sample_vec)
+    except Exception:
+        # fallback to a conservative default if embedding call fails
+        desired_dim = 3072
 
+    # if index exists, verify its dimension; if mismatch, delete & recreate
+    if PINECONE_INDEX_NAME in existing_indexes:
+        try:
+            info = _pc_instance.describe_index(PINECONE_INDEX_NAME)
+            current_dim = None
+            # try several ways to read the dimension depending on SDK response
+            if hasattr(info, "dimension"):
+                current_dim = info.dimension
+            elif hasattr(info, "spec") and hasattr(info.spec, "dimension"):
+                current_dim = info.spec.dimension
+            elif isinstance(info, dict) and "dimension" in info:
+                current_dim = info["dimension"]
+        except Exception:
+            current_dim = None
 
-index=pc.Index(PINECONE_INDEX_NAME)
+        if current_dim is not None and int(current_dim) != int(desired_dim):
+            print(f"Existing index dimension {current_dim} != desired {desired_dim}; recreating index")
+            try:
+                _pc_instance.delete_index(PINECONE_INDEX_NAME)
+            except Exception:
+                pass
+            existing_indexes = [i["name"] for i in _pc_instance.list_indexes()]
+
+    if PINECONE_INDEX_NAME not in existing_indexes:
+        _pc_instance.create_index(
+            name=PINECONE_INDEX_NAME,
+            dimension=desired_dim,
+            metric="dotproduct",
+            spec=spec
+        )
+        while not _pc_instance.describe_index(PINECONE_INDEX_NAME).status["ready"]:
+            time.sleep(1)
+
+    _index_instance = _pc_instance.Index(PINECONE_INDEX_NAME)
+    return _index_instance
+
 
 # load,split,embed and upsert pdf docs content
 
 def load_vectorstore(uploaded_files):
-    embed_model = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
+    index = _initialize_pinecone()
+    embed_model = GoogleGenerativeAIEmbeddings( model="models/gemini-embedding-001",)
     file_paths = []
 
     for file in uploaded_files:
