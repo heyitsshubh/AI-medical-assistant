@@ -15,11 +15,7 @@ def setup_logger(name="MedicalAssistant"):
         logger.addHandler(ch)
 
     return logger
-
-
-
 logger=setup_logger()
-
 logger.info("RAG prcoess started")
 logger.debug("Bebugging")
 logger.error("Failed to load")
